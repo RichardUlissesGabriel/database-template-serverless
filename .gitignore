@@ -1,0 +1,12 @@
+# package directories
+/node_modules
+infrastructure/node_modules
+
+jspm_packages
+__tests__/coverage
+
+# Serverless directories
+.serverless
+
+# aws credentials
+.credentials

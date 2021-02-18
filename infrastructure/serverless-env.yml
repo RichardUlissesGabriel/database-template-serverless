@@ -1,0 +1,46 @@
+deploymentBucket:
+  serverless-deploys-packages
+
+dev:
+  vpc:
+    securityGroupIds:
+      - sg-99999999
+      - sg-99999999
+    subnetIds:
+      - subnet-999999
+      - subnet-999999
+  subnetGroup:
+    vpc-rds-dev
+
+test:
+  vpc:
+    securityGroupIds:
+      - sg-99999999
+      - sg-99999999
+    subnetIds:
+      - subnet-999999
+      - subnet-999999
+  subnetGroup:
+    vpc-rds-test
+
+homolog:
+  vpc:
+    securityGroupIds:
+      - sg-99999999
+      - sg-99999999
+    subnetIds:
+      - subnet-999999
+      - subnet-999999
+  subnetGroup:
+    vpc-rds-homolog
+
+prod:
+  vpc:
+    securityGroupIds:
+      - sg-99999999
+      - sg-99999999
+    subnetIds:
+      - subnet-999999
+      - subnet-999999
+  subnetGroup:
+    vpc-rds-prod

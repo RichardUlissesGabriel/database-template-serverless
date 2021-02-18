@@ -1,0 +1,200 @@
+variables:
+  AWS_ACCESS_KEY_ID: $AWS_ACCESS_KEY_ID
+  AWS_SECRET_ACCESS_KEY: $AWS_SECRET_ACCESS_KEY
+
+stages:
+  - dev
+  - test
+  - homolog
+  - prod
+
+cache:
+  paths:
+    - node_modules/
+
+prod:
+  image: node:12-slim
+  stage: prod
+  script:
+    - deploy
+  only:
+    - prod
+
+homolog:
+  image: node:12-slim
+  stage: homolog
+  script:
+    - deploy
+  only:
+    - homolog
+
+test:
+  image: node:12-slim
+  stage: test
+  script:
+    - deploy
+  only:
+    - test
+
+dev:
+  image: node:12-slim
+  stage: dev
+  script:
+    - deploy
+  only:
+    - dev
+
+.auto_devops: &auto_devops |
+
+  #Global Variables
+  NVM_INSTALED=false
+  declare -a PATHS_TO_DEPLOY
+
+  function print_message {
+
+    echo "==============================================================="
+    echo $1
+    echo "==============================================================="
+  }
+
+  function execute_deploy {
+
+    CURRENT_PATH=$(pwd)
+
+    CLUSTER_IDENTIFIER=$(grep -A3 'clusterIdentifier:' ./infrastructure/serverless.yml | head -n1)
+    CLUSTER_IDENTIFIER=${CLUSTER_IDENTIFIER//*clusterIdentifier: /}
+
+    DATABASE_NAME=$(grep -A3 'databaseName:' ./infrastructure/serverless.yml | head -n1)
+    DATABASE_NAME=${DATABASE_NAME//*databaseName: /}
+
+    print_message "Update - apt-get"
+    apt-get -y update
+    print_message "Install - git"
+    apt-get -y install git-core
+    print_message "Install - curl"
+    apt-get -y install curl
+    print_message "Install - unzip"
+    apt-get -y install unzip
+
+    print_message "Install - aws cli"
+    curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+    unzip -o awscliv2.zip
+    ./aws/install
+    aws --version
+
+    print_message "Install - jq"
+    mkdir -p ~/bin && curl -sSL -o ~/bin/jq https://github.com/stedolan/jq/releases/download/jq-1.5/jq-linux64 && chmod +x ~/bin/jq
+    export PATH=$PATH:~/bin
+    jq --version
+
+    print_message "Install - Dependencies"
+    npm i
+
+    print_message "Deploy - Infrastructure"
+    {
+      aws ssm get-parameter --name /$CLUSTER_IDENTIFIER/$CI_COMMIT_REF_NAME/PARAMETERS --with-decryption
+    } || {
+      cd infrastructure
+      npm i
+      npm run deploy:$CI_JOB_STAGE
+      cd ..
+    }
+
+    print_message "Deploy - Prisma to migrate"
+    npm run prisma:$MIGRATE
+
+    print_message "Update - Prisma client no Layer"
+    ROOT_FOLDER_LAYERS="/opt/layer-serverless"
+    if [ -d ${ROOT_FOLDER_LAYERS} ]
+    then
+      cd ${ROOT_FOLDER_LAYERS}
+      git pull origin master
+    else
+      cd /opt
+      git clone  https://user:password@gitlab.com.br/group/layer-serverless.git
+      cd layer-serverless
+    fi
+
+    cd src/layers/MiddyDependenciesPrismaOrm/middy
+
+    if [ ! -d $CLUSTER_IDENTIFIER ]
+    then
+      mkdir $CLUSTER_IDENTIFIER
+      cd $CLUSTER_IDENTIFIER
+    else
+      cd $CLUSTER_IDENTIFIER
+    fi
+
+    if [ ! -d $DATABASE_NAME ]
+    then
+      mkdir $DATABASE_NAME
+      cd $DATABASE_NAME
+      MSG_COMMIT="feat(auto deploy) add prisma client from database $CLUSTER_IDENTIFIER"
+    else
+      cd $DATABASE_NAME
+      MSG_COMMIT="feat(auto deploy) update prisma client from database $CLUSTER_IDENTIFIER"
+    fi
+
+    PARAMETER_VALUE=$(printf '%s' $(aws ssm get-parameter --name /$CLUSTER_IDENTIFIER/$CI_COMMIT_REF_NAME/PARAMETERS --with-decryption) | jq '.Parameter.Value')
+    PARAMETER_VALUE=$(echo $PARAMETER_VALUE | sed 's/\\//g')
+    PARAMETER_VALUE=$(echo $PARAMETER_VALUE | sed 's:^.\(.*\).$:\1:')
+    URL=$(printf '%s' $PARAMETER_VALUE | jq .url -r)
+    DATABASE_URL=$URL
+
+    npm init -y
+    npm i @prisma/cli @prisma/client --save-dev
+
+    echo $(jq ".scripts += {\"prisma:generate\": \"prisma generate --schema=${CURRENT_PATH}/prisma/schema.prisma\"}" package.json ) > package.json
+    echo $(jq ".scripts += {\"project:name\": \"echo ${CURRENT_PATH##*/}\"}" package.json ) > package.json
+
+    sed -i "/provider = \"prisma-client-js\"/a output = \"$(pwd)/.prisma/client\"" ${CURRENT_PATH}/prisma/schema.prisma
+    sed -i "/env(\"DATABASE_URL\")/c\url = \"$DATABASE_URL\"" ${CURRENT_PATH}/prisma/schema.prisma
+    npm run prisma:generate
+    sed -i "/url =/c\  url      = env(\"DATABASE_URL\")" ${CURRENT_PATH}/prisma/schema.prisma
+    sed -i '/output/d' ${CURRENT_PATH}/prisma/schema.prisma
+    sed -i "s/$(echo $CURRENT_PATH | sed 's/\//\\\//g')/\/opt\/${CURRENT_PATH##*/}/g" package.json
+
+    rm -rf node_modules
+    rm -rf package-lock.json
+
+    print_message "Deploy - Configuração do git"
+    git config --global user.email "pipeline_user@mail.com.br"
+    git config --global user.name "pipeline"
+
+    print_message "Deploy - Adiciona alteração ao layer-serverless master"
+    git status
+    git add .
+    git commit -m "$MSG_COMMIT"
+    git push origin master
+
+    cd $ROOT_FOLDER_LAYERS
+
+    print_message "Deploy - Adiciona alteração ao layer-serverless $CI_JOB_STAGE"
+    git checkout $CI_JOB_STAGE
+    git merge master
+    git push origin $CI_JOB_STAGE
+
+    cd $CURRENT_PATH
+    rm -rf node_modules
+  }
+
+  function deploy() {
+    print_message "Choicing account to deploy"
+
+    # homolog prod
+    MIGRATE=migrate-deploy
+
+    if [[ $CI_JOB_STAGE == "dev" ]] || [[ $CI_JOB_STAGE == "test" ]]; then
+      AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID_DEV
+      AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY_DEV
+      # dev e test
+      MIGRATE=migrate-dev
+    fi
+
+    print_message "Deploy - Start"
+    execute_deploy
+    print_message "Deploy - Finished"
+  }
+
+before_script:
+  - *auto_devops

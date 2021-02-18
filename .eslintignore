@@ -1,0 +1,4 @@
+dist
+__tests__/coverage
+src/examples
+*.prisma

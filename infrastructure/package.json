@@ -1,0 +1,17 @@
+{
+  "name": "infrastructure-database",
+  "version": "1.0.0",
+  "description": "Template para a criação de um micro serviço",
+  "scripts": {
+    "deploy:dev": "SL_DEBUG=* serverless deploy --stage dev --accountDeploy dev -v",
+    "deploy:test": "SL_DEBUG=* serverless deploy --stage test --accountDeploy dev -v",
+    "deploy:homolog": "SL_DEBUG=* serverless deploy --stage homolog --accountDeploy prod -v",
+    "deploy:prod": "SL_DEBUG=* serverless deploy --stage prod --accountDeploy prod -v",
+    "deploy": "npm run deploy:dev"
+  },
+  "author": "Richard Ulisses Gabriel",
+  "license": "ISC",
+  "devDependencies": {
+    "serverless": "1.61.0"
+  }
+}

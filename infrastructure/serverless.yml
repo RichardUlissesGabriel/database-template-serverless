@@ -1,0 +1,59 @@
+# Creation: serverless deploy --stage=dev --aws-profile {AWS-profile} -v
+service: ${self:provider.clusterIdentifier}-database
+
+frameworkVersion: ">=1.0.0 <2.0.0"
+
+provider:
+  name: aws
+  stage: ${opt:stage, 'dev'}
+  region: us-east-1 # Usually we use us-east-1
+
+  deploymentBucket:
+    name: ${file(./serverless-env.yml):deploymentBucket} # bucket name where we upload the cloudformation generated
+  vpc: ${file(./serverless-env.yml):${self:provider.stage}.vpc}
+
+  clusterIdentifier: clusterIdentifier
+  databaseName: databaseName
+
+# For more info access: https://docs.aws.amazon.com/pt_br/AWSCloudFormation/latest/UserGuide/aws-properties-rds-database-instance.html
+resources:
+  Resources:
+    database:
+      Type: AWS::RDS::DBCluster
+      Properties:
+        BackupRetentionPeriod: 15
+        DatabaseName: ${self:provider.databaseName} # exemplo EAD
+        DBClusterIdentifier: ${self:provider.clusterIdentifier}-${self:provider.stage} # exemplo avadb
+        DBSubnetGroupName: ${file(./serverless-env.yml):${self:provider.stage}.subnetGroup}
+        DeletionProtection: false
+        EnableHttpEndpoint: true
+        Engine: aurora-mysql
+        EngineMode: serverless
+        EngineVersion: 5.7.mysql_aurora.2.07.1
+        Port: 3306
+        ScalingConfiguration:
+          AutoPause: true
+          MaxCapacity: 64
+          MinCapacity: 1
+          SecondsUntilAutoPause: 300
+        StorageEncrypted: true
+        VpcSecurityGroupIds: ${file(./serverless-env.yml):${self:provider.stage}.vpc.securityGroupIds}
+    bucketLogs:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: log-${self:provider.clusterIdentifier}-${self:provider.stage}
+        LifecycleConfiguration:
+          Rules:
+            - Id: SendToGlacier
+              Status: Enabled
+              Transitions:
+                - StorageClass: GLACIER # após 1 ano
+                  TransitionInDays: 365
+                - StorageClass: DEEP_ARCHIVE # após 2 anos
+                  TransitionInDays: 730
+            - Id: DeleteFile
+              Status: Enabled
+              ExpirationInDays: 1825 # exclusão após 5 anos
+
+plugins:
+  - creationDBUser

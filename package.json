@@ -1,0 +1,72 @@
+{
+  "name": "database-template-serverless",
+  "version": "1.0.0",
+  "description": "Projeto responsável por armazenar todo backend da nova estrutura",
+  "scripts": {
+    "update-version": "./scripts/update-version.sh",
+    "update-git-version": "./scripts/update-git-version.sh",
+    "init-project": "./scripts/init-project.sh",
+    "create-infrastructure": ". ./scripts/create-infrastructure.sh",
+    "change-log": "auto-changelog -p",
+    "test": "jest",
+    "eslint": "eslint .",
+    "install": "npm run update-git-version",
+    "deploy:dev": "SL_DEBUG=* serverless deploy --stage dev --accountDeploy dev -v",
+    "deploy:test": "SL_DEBUG=* serverless deploy --stage test --accountDeploy dev -v",
+    "deploy:homolog": "SL_DEBUG=* serverless deploy --stage homolog --accountDeploy prod -v",
+    "deploy:prod": "SL_DEBUG=* serverless deploy --stage prod --accountDeploy prod -v",
+    "deploy": "npm run deploy:dev",
+    "prisma:init": ". ./scripts/create-infrastructure.sh && prisma init",
+    "prisma:introspect": ". ./scripts/create-infrastructure.sh && prisma introspect --schema=./prisma/schema.prisma",
+    "prisma:generate": ". ./scripts/create-infrastructure.sh && prisma generate --schema=./prisma/schema.prisma",
+    "prisma:migrate-dev-create-only": ". ./scripts/create-infrastructure.sh && prisma migrate dev --schema=./prisma/schema.prisma  --create-only --preview-feature",
+    "prisma:migrate-dev": ". ./scripts/create-infrastructure.sh && prisma migrate dev --schema=./prisma/schema.prisma --preview-feature",
+    "prisma:migrate-reset": ". ./scripts/create-infrastructure.sh && prisma migrate reset --schema=./prisma/schema.prisma --preview-feature",
+    "prisma:migrate-deploy": ". ./scripts/create-infrastructure.sh && prisma migrate deploy --schema=./prisma/schema.prisma --preview-feature",
+    "prisma:migrate-status": ". ./scripts/create-infrastructure.sh && prisma migrate status --schema=./prisma/schema.prisma --preview-feature",
+    "prisma:studio": ". ./scripts/create-infrastructure.sh && prisma studio",
+    "prisma:version": ". ./scripts/create-infrastructure.sh && prisma -v",
+    "build": "docker build --rm -t database-template-serverless -f dockerfile .",
+    "start": "docker run --rm -it -v $(pwd):$(pwd) -v ~/.aws:/root/.aws database-template-serverless",
+    "clear": "docker rmi database-template-serverless node:12-slim"
+  },
+  "config": {
+    "commitizen": {
+      "path": "./node_modules/cz-conventional-changelog"
+    }
+  },
+  "husky": {
+    "hooks": {
+      "commit-msg": "commitlint -E HUSKY_GIT_PARAMS",
+      "prepare-commit-msg": "exec < /dev/tty && git cz --hook || true",
+      "pre-commit": "npm run update-version package && rm -rf CHANGELOG.md && auto-changelog -p && git add CHANGELOG.md package.json package-lock.json && lint-staged",
+      "post-commit": "npm run update-version tag && git push --tags"
+    }
+  },
+  "lint-staged": {
+    "*.js": [
+      "eslint --fix",
+      "jest --bail --findRelatedTests",
+      "git add"
+    ]
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^9.0.1",
+    "@commitlint/config-conventional": "^9.0.1",
+    "auto-changelog": "^2.1.0",
+    "@prisma/cli": "^2.14.0",
+    "@prisma/client": "^2.14.0",
+    "commitizen": "^4.1.2",
+    "cz-conventional-changelog": "^3.2.0",
+    "eslint": "^7.3.1",
+    "eslint-config-standard": "^14.1.1",
+    "eslint-plugin-absolute-import": "^1.4.4",
+    "eslint-plugin-import": "^2.22.0",
+    "eslint-plugin-node": "^11.1.0",
+    "eslint-plugin-promise": "^4.2.1",
+    "eslint-plugin-standard": "^4.0.1",
+    "husky": "^4.2.5",
+    "jest": "^26.1.0",
+    "lint-staged": "^10.2.11"
+  }
+}

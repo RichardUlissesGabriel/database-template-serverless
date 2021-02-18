@@ -1,0 +1,11 @@
+{
+  "name": "creationDBUser",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "author": "Richard Ulisses Gabriel",
+  "license": "ISC",
+  "dependencies": {
+    "generate-password": "^1.5.1"
+  }
+}
